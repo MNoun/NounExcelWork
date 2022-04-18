@@ -19,11 +19,8 @@ func main() {
 
 	//make a slice of index where county = 0
 	index_list := makeIndexList(county_slice)
+	index_slice := sanitizeIndex(index_list)
 
-	print(state_slice)
-	print(popChange_slice)
-
-	print("length = ", len(index_list))
 }
 
 func loadExcelData() ([]string, []string, []string) {
@@ -66,14 +63,12 @@ func loadExcelData() ([]string, []string, []string) {
 	return county_rows, state_rows, popChange_rows
 }
 
-func makeIndexList(county_rows []string) []int {
+func makeIndexList(county_slice []string) []int {
 	index_list := make([]int, 50)
-	var count = 0
-	for _, row := range county_rows {
+	for index, row := range county_slice {
 		if row == "0" {
-			index_list = append(index_list, count)
+			index_list = append(index_list, index)
 		}
-		count++
 	}
 	return index_list
 }
@@ -83,6 +78,16 @@ func sanitizeData(s []string) []string {
 	for _, str := range s {
 		if str != "" {
 			r = append(r, str)
+		}
+	}
+	return r
+}
+
+func sanitizeIndex(s []int) []int {
+	var r []int
+	for _, x := range s {
+		if x != 0 {
+			r = append(r, x)
 		}
 	}
 	return r
