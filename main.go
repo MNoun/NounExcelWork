@@ -21,6 +21,24 @@ func main() {
 	index_list := makeIndexList(county_slice)
 	index_slice := sanitizeIndex(index_list)
 
+	//create slices of test data
+	state_testSlice := make([]string, 50)
+	popChange_testSclice := make([]string, 50)
+
+	//populate slices
+	for _, index := range index_slice {
+		state_testSlice = append(state_testSlice, state_slice[index])
+		popChange_testSclice = append(popChange_testSclice, popChange_slice[index])
+	}
+
+	//sanitize test data for display
+	state_displaySlice := sanitizeData(state_testSlice)
+	popChange_displaySlice := sanitizeData(popChange_testSclice)
+
+	print("length = ", len(state_displaySlice))
+	print("\n")
+	print("length = ", len(popChange_displaySlice))
+
 }
 
 func loadExcelData() ([]string, []string, []string) {
