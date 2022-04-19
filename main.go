@@ -1,3 +1,9 @@
+/************************
+Created by: Mitchell Noun
+Date created: 4/18/22
+Class: COMP415 Emerging Languages
+Assignment: Project 4
+*************************/
 package main
 
 import (
@@ -7,10 +13,10 @@ import (
 	"github.com/blizzy78/ebitenui/image"
 	"github.com/blizzy78/ebitenui/widget"
 	"github.com/hajimehoshi/ebiten/v2"
-	"golang.org/x/image/font/basicfont"
 	"image/color"
 	"image/png"
 	"log"
+	"strconv"
 	"strings"
 )
 import "github.com/xuri/excelize/v2"
@@ -19,16 +25,16 @@ import "github.com/xuri/excelize/v2"
 var EmbeddedAssets embed.FS
 
 var demoApp GuiApp
-var textWidget *widget.Text
 
 func main() {
 
 	//get slices of excel data
-	county_rows, state_rows, popChange_rows := loadExcelData()
+	county_rows, state_rows, pop_rows, popChange_rows := loadExcelData()
 
 	//get rid of empty strings in slices
 	county_slice := sanitizeData(county_rows)
 	state_slice := sanitizeData(state_rows)
+	pop_slice := sanitizeData(pop_rows)
 	popChange_slice := sanitizeData(popChange_rows)
 
 	//make a slice of index where county = 0
@@ -37,23 +43,55 @@ func main() {
 
 	//create slices of test data
 	state_testSlice := make([]string, 50)
+	pop_testSlice := make([]string, 50)
 	popChange_testSclice := make([]string, 50)
 
 	//populate slices
 	for _, index := range index_slice {
 		state_testSlice = append(state_testSlice, state_slice[index])
+		pop_testSlice = append(pop_testSlice, pop_slice[index])
 		popChange_testSclice = append(popChange_testSclice, popChange_slice[index])
 	}
 
 	//sanitize test data for display
 	state_displaySlice := sanitizeData(state_testSlice)
+	pop_displaySlice := sanitizeData(pop_testSlice)
 	popChange_displaySlice := sanitizeData(popChange_testSclice)
+
+	//population percent change slice
+	percent_slice := make([]float32, 50)
+
+	for index, og := range pop_displaySlice {
+		intPopChange, err := strconv.Atoi(popChange_displaySlice[index])
+		if err != nil {
+			log.Fatalln(err)
+		}
+		intOG, err := strconv.Atoi(og)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		percentChange := (intPopChange / intOG) * 100
+		percent_slice = append(percent_slice, float32(percentChange))
+	}
+
+	//make a slice of States
+	var sliceOfStates []State
+
+	for index, str := range state_displaySlice {
+		stateNameAndPop := fmt.Sprintf("%s: %s", str, popChange_displaySlice[index])
+		percent := percent_slice[index]
+		s := State{
+			FullName:      stateNameAndPop,
+			PercentChange: percent,
+		}
+		sliceOfStates = append(sliceOfStates, s)
+	}
 
 	//setup GUI
 	ebiten.SetWindowSize(900, 800)
 	ebiten.SetWindowTitle("Excel List")
 
-	demoApp = GuiApp{AppUI: MakeUIWindow(state_displaySlice, popChange_displaySlice)}
+	demoApp = GuiApp{AppUI: MakeUIWindow(state_displaySlice, popChange_displaySlice, sliceOfStates)}
 
 	err := ebiten.RunGame(&demoApp)
 	if err != nil {
@@ -81,7 +119,7 @@ type GuiApp struct {
 	AppUI *ebitenui.UI
 }
 
-func MakeUIWindow(state_displaySlice, popChange_displaySlice []string) (GUIhandler *ebitenui.UI) {
+func MakeUIWindow(state_displaySlice, popChange_displaySlice []string, sliceOfStates []State) (GUIhandler *ebitenui.UI) {
 	background := image.NewNineSliceColor(color.Gray16{})
 	rootContainer := widget.NewContainer(
 		widget.ContainerOpts.Layout(widget.NewGridLayout(
@@ -93,7 +131,6 @@ func MakeUIWindow(state_displaySlice, popChange_displaySlice []string) (GUIhandl
 			}),
 			widget.GridLayoutOpts.Spacing(0, 20))),
 		widget.ContainerOpts.BackgroundImage(background))
-	textInfo := widget.TextOptions{}.Text("This is our first Window", basicfont.Face7x13, color.White)
 
 	resources, err := newListResources()
 	if err != nil {
@@ -101,15 +138,25 @@ func MakeUIWindow(state_displaySlice, popChange_displaySlice []string) (GUIhandl
 	}
 
 	dataAsGeneric1 := make([]interface{}, len(state_displaySlice))
-	for position, state := range state_displaySlice {
-		dataAsGeneric1[position] = state
+	for position, s := range state_displaySlice {
+		dataAsGeneric1[position] = s
+	}
+
+	dataAsGeneric2 := make([]interface{}, len(popChange_displaySlice))
+	for position, x := range popChange_displaySlice {
+		dataAsGeneric2[position] = x
 	}
 
 	listWidget := widget.NewList(
 		widget.ListOpts.Entries(dataAsGeneric1),
-		//widget.ListOpts.EntryLabelFunc(func(e interface{}) string {
-		//
-		//}),
+		widget.ListOpts.Entries(dataAsGeneric2),
+		widget.ListOpts.EntryLabelFunc(func(e interface{}) string {
+			name := ""
+			for _, state := range sliceOfStates {
+				name = state.FullName
+			}
+			return name
+		}),
 		widget.ListOpts.ScrollContainerOpts(widget.ScrollContainerOpts.Image(resources.image)),
 		widget.ListOpts.SliderOpts(
 			widget.SliderOpts.Images(resources.track, resources.handle),
@@ -123,9 +170,6 @@ func MakeUIWindow(state_displaySlice, popChange_displaySlice []string) (GUIhandl
 			//do something when a list item changes
 		}))
 	rootContainer.AddChild(listWidget)
-	textWidget = widget.NewText(textInfo)
-	rootContainer.AddChild(textWidget)
-
 	GUIhandler = &ebitenui.UI{Container: rootContainer}
 	return GUIhandler
 }
@@ -157,7 +201,7 @@ func loadPNGImageFromEmbedded(name string) *ebiten.Image {
 	return gameImage
 }
 
-func loadExcelData() ([]string, []string, []string) {
+func loadExcelData() ([]string, []string, []string, []string) {
 	excelFile, err := excelize.OpenFile("countyPopChange2020-2021.xlsx")
 	if err != nil {
 		log.Fatalln(err)
@@ -170,6 +214,7 @@ func loadExcelData() ([]string, []string, []string) {
 	//creating slices for needed rows
 	county_rows := make([]string, 3196)
 	state_rows := make([]string, 3196)
+	pop_rows := make([]string, 3196)
 	popChange_rows := make([]string, 3196)
 
 	for _, row := range all_rows {
@@ -187,6 +232,13 @@ func loadExcelData() ([]string, []string, []string) {
 		}
 	}
 	for _, row := range all_rows {
+		temp_string := fmt.Sprintln(row[8])
+		temp_slice := strings.Split(temp_string, "\n")
+		for _, s := range temp_slice {
+			pop_rows = append(pop_rows, s) //returns slice of the state column
+		}
+	}
+	for _, row := range all_rows {
 		temp_string := fmt.Sprintln(row[11])
 		temp_slice := strings.Split(temp_string, "\n")
 		for _, s := range temp_slice {
@@ -194,7 +246,7 @@ func loadExcelData() ([]string, []string, []string) {
 		}
 	}
 
-	return county_rows, state_rows, popChange_rows
+	return county_rows, state_rows, pop_rows, popChange_rows
 }
 
 func makeIndexList(county_slice []string) []int {
