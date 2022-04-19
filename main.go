@@ -1,11 +1,25 @@
 package main
 
 import (
+	"embed"
 	"fmt"
+	"github.com/blizzy78/ebitenui"
+	"github.com/blizzy78/ebitenui/image"
+	"github.com/blizzy78/ebitenui/widget"
+	"github.com/hajimehoshi/ebiten/v2"
+	"golang.org/x/image/font/basicfont"
+	"image/color"
+	"image/png"
 	"log"
 	"strings"
 )
 import "github.com/xuri/excelize/v2"
+
+//go:embed graphics/*
+var EmbeddedAssets embed.FS
+
+var demoApp GuiApp
+var textWidget *widget.Text
 
 func main() {
 
@@ -35,10 +49,112 @@ func main() {
 	state_displaySlice := sanitizeData(state_testSlice)
 	popChange_displaySlice := sanitizeData(popChange_testSclice)
 
-	print("length = ", len(state_displaySlice))
-	print("\n")
-	print("length = ", len(popChange_displaySlice))
+	//setup GUI
+	ebiten.SetWindowSize(900, 800)
+	ebiten.SetWindowTitle("Excel List")
 
+	demoApp = GuiApp{AppUI: MakeUIWindow(state_displaySlice, popChange_displaySlice)}
+
+	err := ebiten.RunGame(&demoApp)
+	if err != nil {
+		log.Fatalln("Error running User Interface Demo", err)
+	}
+
+}
+
+func (g GuiApp) Update() error {
+	//TODO finish me
+	g.AppUI.Update()
+	return nil
+}
+
+func (g GuiApp) Draw(screen *ebiten.Image) {
+	//TODO finish me
+	g.AppUI.Draw(screen)
+}
+
+func (g GuiApp) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	return outsideWidth, outsideHeight
+}
+
+type GuiApp struct {
+	AppUI *ebitenui.UI
+}
+
+func MakeUIWindow(state_displaySlice, popChange_displaySlice []string) (GUIhandler *ebitenui.UI) {
+	background := image.NewNineSliceColor(color.Gray16{})
+	rootContainer := widget.NewContainer(
+		widget.ContainerOpts.Layout(widget.NewGridLayout(
+			widget.GridLayoutOpts.Columns(1),
+			widget.GridLayoutOpts.Stretch([]bool{true}, []bool{false, true, false}),
+			widget.GridLayoutOpts.Padding(widget.Insets{
+				Top:    20,
+				Bottom: 20,
+			}),
+			widget.GridLayoutOpts.Spacing(0, 20))),
+		widget.ContainerOpts.BackgroundImage(background))
+	textInfo := widget.TextOptions{}.Text("This is our first Window", basicfont.Face7x13, color.White)
+
+	resources, err := newListResources()
+	if err != nil {
+		log.Println(err)
+	}
+
+	dataAsGeneric1 := make([]interface{}, len(state_displaySlice))
+	for position, state := range state_displaySlice {
+		dataAsGeneric1[position] = state
+	}
+
+	listWidget := widget.NewList(
+		widget.ListOpts.Entries(dataAsGeneric1),
+		//widget.ListOpts.EntryLabelFunc(func(e interface{}) string {
+		//
+		//}),
+		widget.ListOpts.ScrollContainerOpts(widget.ScrollContainerOpts.Image(resources.image)),
+		widget.ListOpts.SliderOpts(
+			widget.SliderOpts.Images(resources.track, resources.handle),
+			widget.SliderOpts.HandleSize(resources.handleSize),
+			widget.SliderOpts.TrackPadding(resources.trackPadding)),
+		widget.ListOpts.EntryColor(resources.entry),
+		widget.ListOpts.EntryFontFace(resources.face),
+		widget.ListOpts.EntryTextPadding(resources.entryPadding),
+		widget.ListOpts.HideHorizontalSlider(),
+		widget.ListOpts.EntrySelectedHandler(func(args *widget.ListEntrySelectedEventArgs) {
+			//do something when a list item changes
+		}))
+	rootContainer.AddChild(listWidget)
+	textWidget = widget.NewText(textInfo)
+	rootContainer.AddChild(textWidget)
+
+	GUIhandler = &ebitenui.UI{Container: rootContainer}
+	return GUIhandler
+}
+
+func loadImageNineSlice(path string, centerWidth int, centerHeight int) (*image.NineSlice, error) {
+	i := loadPNGImageFromEmbedded(path)
+
+	w, h := i.Size()
+	return image.NewNineSlice(i,
+			[3]int{(w - centerWidth) / 2, centerWidth, w - (w-centerWidth)/2 - centerWidth},
+			[3]int{(h - centerHeight) / 2, centerHeight, h - (h-centerHeight)/2 - centerHeight}),
+		nil
+}
+
+func loadPNGImageFromEmbedded(name string) *ebiten.Image {
+	pictNames, err := EmbeddedAssets.ReadDir("graphics")
+	if err != nil {
+		log.Fatal("failed to read embedded dir ", pictNames, " ", err)
+	}
+	embeddedFile, err := EmbeddedAssets.Open("graphics/" + name)
+	if err != nil {
+		log.Fatal("failed to load embedded image ", embeddedFile, err)
+	}
+	rawImage, err := png.Decode(embeddedFile)
+	if err != nil {
+		log.Fatal("failed to load embedded image ", name, err)
+	}
+	gameImage := ebiten.NewImageFromImage(rawImage)
+	return gameImage
 }
 
 func loadExcelData() ([]string, []string, []string) {
@@ -109,8 +225,4 @@ func sanitizeIndex(s []int) []int {
 		}
 	}
 	return r
-}
-
-func makeUIWindow() {
-
 }
