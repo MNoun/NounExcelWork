@@ -13,6 +13,7 @@ import (
 	"github.com/blizzy78/ebitenui/image"
 	"github.com/blizzy78/ebitenui/widget"
 	"github.com/hajimehoshi/ebiten/v2"
+	"golang.org/x/image/font/basicfont"
 	"image/color"
 	"image/png"
 	"log"
@@ -59,7 +60,7 @@ func main() {
 	popChange_displaySlice := sanitizeData(popChange_testSclice)
 
 	//population percent change slice
-	percent_slice := make([]float32, 50)
+	percent_slice := make([]float64, 50)
 
 	for index, og := range pop_displaySlice {
 		intPopChange, err := strconv.Atoi(popChange_displaySlice[index])
@@ -71,7 +72,7 @@ func main() {
 			log.Fatalln(err)
 		}
 		percentChange := (intPopChange / intOG) * 100
-		percent_slice = append(percent_slice, float32(percentChange))
+		percent_slice = append(percent_slice, float64(percentChange))
 	}
 
 	//make a slice of States
@@ -167,7 +168,14 @@ func MakeUIWindow(state_displaySlice, popChange_displaySlice []string, sliceOfSt
 		widget.ListOpts.EntryTextPadding(resources.entryPadding),
 		widget.ListOpts.HideHorizontalSlider(),
 		widget.ListOpts.EntrySelectedHandler(func(args *widget.ListEntrySelectedEventArgs) {
-			//do something when a list item changes
+			var percentFloat float64
+			for _, state := range sliceOfStates {
+				percentFloat = state.PercentChange
+			}
+			text := fmt.Sprintf("%f", percentFloat)
+			percentChangeText := widget.TextOptions{}.Text(text, basicfont.Face7x13, color.White)
+			textWidget := widget.NewText(percentChangeText)
+			rootContainer.AddChild(textWidget)
 		}))
 	rootContainer.AddChild(listWidget)
 	GUIhandler = &ebitenui.UI{Container: rootContainer}
